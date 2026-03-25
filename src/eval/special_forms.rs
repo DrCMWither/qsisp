@@ -1,18 +1,18 @@
 use std::fs;
 use std::path::Path;
 
-use crate::parser::Expr;
 use crate::lexer::lex;
-use crate::parser::parse;
-use crate::keywords::KeywordMap;
+use crate::locale_pack::LocalePack;
 use crate::normalize::normalize_program;
+use crate::parser::Expr;
+use crate::parser::parse;
 
-use super::core::{eval, is_truthy, expr_to_value};
+use super::core::{eval, expr_to_value, is_truthy};
 use super::env::Env;
 use super::error::EvalError;
 use super::value::{Function, Value};
 
-pub fn eval_define(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_define(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 3 {
         return Err(EvalError::InvalidForm(
             "define expects exactly 2 arguments".into(),
@@ -21,7 +21,7 @@ pub fn eval_define(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
 
     match &items[1] {
         Expr::Symbol(name) => {
-            let value = eval(&items[2], env)?;
+            let value = eval(&items[2], env, pack)?;
             env.set(name.clone(), value.clone());
             Ok(value)
         }
@@ -71,22 +71,22 @@ pub fn eval_define(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
     }
 }
 
-pub fn eval_if(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_if(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 4 {
         return Err(EvalError::InvalidForm(
             "if expects exactly 3 arguments".into(),
         ));
     }
 
-    let cond = eval(&items[1], env)?;
+    let cond = eval(&items[1], env, pack)?;
     if is_truthy(&cond) {
-        eval(&items[2], env)
+        eval(&items[2], env, pack)
     } else {
-        eval(&items[3], env)
+        eval(&items[3], env, pack)
     }
 }
 
-pub fn eval_let(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_let(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 3 {
         return Err(EvalError::InvalidForm(
             "let expects exactly 2 arguments".into(),
@@ -123,15 +123,14 @@ pub fn eval_let(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
             }
         };
 
-        // Note: use outer env instead of local_env
-        let value = eval(&pair[1], env)?;
+        let value = eval(&pair[1], env, pack)?;
         local_env.set(name, value);
     }
 
-    eval(&items[2], &local_env)
+    eval(&items[2], &local_env, pack)
 }
 
-pub fn eval_lambda(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_lambda(items: &[Expr], env: &Env, _pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 3 {
         return Err(EvalError::InvalidForm(
             "lambda expects exactly 2 arguments".into(),
@@ -167,19 +166,19 @@ pub fn eval_lambda(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
     }))
 }
 
-pub fn eval_begin(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_begin(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() == 1 {
         return Ok(Value::Nil);
     }
 
     let mut last = Value::Nil;
     for expr in &items[1..] {
-        last = eval(expr, env)?;
+        last = eval(expr, env, pack)?;
     }
     Ok(last)
 }
 
-pub fn eval_set(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_set(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 3 {
         return Err(EvalError::InvalidForm(
             "set! expects exactly 2 arguments".into(),
@@ -195,19 +194,21 @@ pub fn eval_set(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
         }
     };
 
-    let value = eval(&items[2], env)?;
+    let value = eval(&items[2], env, pack)?;
     env.assign(&name, value.clone())?;
     Ok(value)
 }
 
-pub fn eval_quote(items: &[Expr], _env: &Env) -> Result<Value, EvalError> {
+pub fn eval_quote(items: &[Expr], _env: &Env, _pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 2 {
-        return Err(EvalError::InvalidForm("quote expects exactly 1 argument".into()));
+        return Err(EvalError::InvalidForm(
+            "quote expects exactly 1 argument".into(),
+        ));
     }
     Ok(expr_to_value(&items[1]))
 }
 
-pub fn eval_defmacro(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_defmacro(items: &[Expr], env: &Env, _pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 3 {
         return Err(EvalError::InvalidForm(
             "defmacro expects exactly 2 arguments: (defmacro (name params...) body)".into(),
@@ -259,9 +260,11 @@ pub fn eval_defmacro(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
     }
 }
 
-pub fn eval_import(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+pub fn eval_import(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.len() != 2 {
-        return Err(EvalError::InvalidForm("import expects exactly 1 string argument".into()));
+        return Err(EvalError::InvalidForm(
+            "import expects exactly 1 string argument".into(),
+        ));
     }
 
     let rel_filename = match &items[1] {
@@ -269,13 +272,16 @@ pub fn eval_import(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
         _ => return Err(EvalError::TypeError("import requires a string path".into())),
     };
 
-    let base_dir = env.get("__FILE__").and_then(|v| {
-        if let Value::String(path_str) = v {
-            Path::new(&path_str).parent().map(|p| p.to_path_buf())
-        } else {
-            None
-        }
-    }).unwrap_or_else(|| std::env::current_dir().unwrap());
+    let base_dir = env
+        .get("__FILE__")
+        .and_then(|v| {
+            if let Value::String(path_str) = v {
+                Path::new(&path_str).parent().map(|p| p.to_path_buf())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
 
     let target_path = base_dir.join(rel_filename);
     let canonical_path = fs::canonicalize(&target_path).unwrap_or(target_path);
@@ -292,8 +298,7 @@ pub fn eval_import(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
         EvalError::InvalidForm(format!("Syntax error in {:?}: {:?}", canonical_path, e))
     })?;
 
-    let kw = KeywordMap::new(env.locale);
-    let normalized_ast = normalize_program(&ast, &kw);
+    let normalized_ast = normalize_program(&ast, pack);
 
     let old_file = env.get("__FILE__");
     env.set(
@@ -303,7 +308,7 @@ pub fn eval_import(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
 
     let mut last_val = Value::Nil;
     for expr in &normalized_ast {
-        last_val = super::core::eval(expr, env)?;
+        last_val = super::core::eval(expr, env, pack)?;
     }
 
     if let Some(old) = old_file {

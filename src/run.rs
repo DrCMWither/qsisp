@@ -4,11 +4,11 @@ use std::path::PathBuf;
 use crate::cli::CliOptions;
 use crate::debugger::{debug_block, debug_header};
 use crate::eval::{eval_program, Env, Value};
-use crate::keywords::KeywordMap;
 use crate::lexer::lex;
 use crate::normalize::normalize_program;
 use crate::parser::parse;
 use crate::stdlib;
+use crate::locale_pack::LocalePack;
 
 pub fn run(opts: &CliOptions) -> Result<(), String> {
     let source = fs::read_to_string(&opts.file_path)
@@ -24,8 +24,8 @@ pub fn run(opts: &CliOptions) -> Result<(), String> {
         .map_err(|err| format!("Syntax error @ {:?}", err))?;
     debug_block(opts.verbose, "ast", &ast);
 
-    let kw = KeywordMap::new(opts.locale);
-    let normalized_ast = normalize_program(&ast, &kw);
+    let pack = LocalePack::for_locale(opts.locale);
+    let normalized_ast = normalize_program(&ast, &pack);
     debug_block(opts.verbose, "normalized ast", &normalized_ast);
 
     let env = Env::new(opts.locale);
@@ -38,7 +38,7 @@ pub fn run(opts: &CliOptions) -> Result<(), String> {
         Value::String(absolute_path.to_string_lossy().into_owned()),
     );
 
-    let values = eval_program(&normalized_ast, &env)
+    let values = eval_program(&normalized_ast, &env, &pack)
         .map_err(|err| format!("Eval error @ {:?}", err))?;
     debug_block(opts.verbose, "vals", &values);
 

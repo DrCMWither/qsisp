@@ -1,3 +1,4 @@
+use crate::locale_pack::LocalePack;
 use crate::parser::Expr;
 use crate::symbols;
 
@@ -9,26 +10,38 @@ use super::special_forms::{
 };
 use super::value::Value;
 
-pub fn eval_program(exprs: &[Expr], env: &Env) -> Result<Vec<Value>, EvalError> {
+pub fn eval_program(exprs: &[Expr], env: &Env, pack: &LocalePack) -> Result<Vec<Value>, EvalError> {
     let mut out = Vec::new();
     for expr in exprs {
-        out.push(eval(expr, env)?);
+        out.push(eval(expr, env, pack)?);
     }
     Ok(out)
 }
 
-pub fn eval(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
+pub fn eval(expr: &Expr, env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     match expr {
         Expr::Number(n) => Ok(Value::Number(*n)),
         Expr::String(s) => Ok(Value::String(s.clone())),
-        Expr::Symbol(name) => env
-            .get(name)
-            .ok_or_else(|| EvalError::UndefinedSymbol(name.clone())),
-        Expr::List(items) => eval_list(items, env),
+        Expr::Symbol(name) => resolve_symbol(name, env, pack),
+        Expr::List(items) => eval_list(items, env, pack),
     }
 }
 
-fn eval_list(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+fn resolve_symbol(name: &str, env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
+    if let Some(v) = env.get(name) {
+        return Ok(v);
+    }
+
+    if let Some(canonical) = pack.canonicalize_runtime(name) {
+        if let Some(v) = env.get(canonical) {
+            return Ok(v);
+        }
+    }
+
+    Err(EvalError::UndefinedSymbol(name.to_string()))
+}
+
+fn eval_list(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, EvalError> {
     if items.is_empty() {
         return Err(EvalError::InvalidForm(
             "empty list cannot be evaluated".into(),
@@ -36,33 +49,36 @@ fn eval_list(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
     }
 
     match &items[0] {
-        Expr::Symbol(name) if name == symbols::DEFINE => return eval_define(items, env),
-        Expr::Symbol(name) if name == symbols::IF => return eval_if(items, env),
-        Expr::Symbol(name) if name == symbols::LET => return eval_let(items, env),
-        Expr::Symbol(name) if name == symbols::LAMBDA => return eval_lambda(items, env),
-        Expr::Symbol(name) if name == symbols::BEGIN => return eval_begin(items, env),
-        Expr::Symbol(name) if name == symbols::SET => return eval_set(items, env),
-        Expr::Symbol(name) if name == symbols::QUOTE => return eval_quote(items, env),
-        Expr::Symbol(name) if name == symbols::DEFMACRO => return eval_defmacro(items, env),
-        Expr::Symbol(name) if name == symbols::IMPORT => return eval_import(items, env),
+        Expr::Symbol(name) if name == symbols::DEFINE => return eval_define(items, env, pack),
+        Expr::Symbol(name) if name == symbols::IF => return eval_if(items, env, pack),
+        Expr::Symbol(name) if name == symbols::LET => return eval_let(items, env, pack),
+        Expr::Symbol(name) if name == symbols::LAMBDA => return eval_lambda(items, env, pack),
+        Expr::Symbol(name) if name == symbols::BEGIN => return eval_begin(items, env, pack),
+        Expr::Symbol(name) if name == symbols::SET => return eval_set(items, env, pack),
+        Expr::Symbol(name) if name == symbols::QUOTE => return eval_quote(items, env, pack),
+        Expr::Symbol(name) if name == symbols::DEFMACRO => return eval_defmacro(items, env, pack),
+        Expr::Symbol(name) if name == symbols::IMPORT => return eval_import(items, env, pack),
         _ => {}
     }
 
-    let callee = eval(&items[0], env)?;
+    let callee = eval(&items[0], env, pack)?;
     match callee {
         Value::Macro(mac) => {
             let local_env = Env::child(mac.env.clone());
             if items.len() - 1 != mac.params.len() {
-                return Err(EvalError::ArityMismatch { expected: mac.params.len(), got: items.len() - 1 });
+                return Err(EvalError::ArityMismatch {
+                    expected: mac.params.len(),
+                    got: items.len() - 1,
+                });
             }
             for (param, arg_expr) in mac.params.iter().zip(items[1..].iter()) {
                 local_env.set(param.clone(), expr_to_value(arg_expr));
             }
-            let expanded_value = eval(&mac.body, &local_env)?;
+            let expanded_value = eval(&mac.body, &local_env, pack)?;
             let expanded_expr = value_to_expr(&expanded_value)?;
-            eval(&expanded_expr, env)
+            eval(&expanded_expr, env, pack)
         }
-        _ => apply(callee, &items[1..], env)
+        _ => apply(callee, &items[1..], env, pack),
     }
 }
 

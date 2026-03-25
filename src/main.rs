@@ -2,7 +2,6 @@ mod cli;
 mod locale;
 mod lexer;
 mod parser;
-mod keywords;
 mod normalize;
 mod eval;
 mod stdlib;

@@ -1,0 +1,28 @@
+use crate::locale_pack::LocalePack;
+
+#[derive(Debug, Clone, Copy)]
+pub struct KeywordMap<'a> {
+    pack: &'a LocalePack,
+}
+
+impl<'a> KeywordMap<'a> {
+    pub fn new(pack: &'a LocalePack) -> Self {
+        Self { pack }
+    }
+
+    pub fn canonicalize_special_form(&self, s: &str) -> Option<&'static str> {
+        self.pack.canonicalize_special_form(s)
+    }
+
+    pub fn canonicalize_runtime(&self, s: &str) -> Option<&'static str> {
+        self.pack.canonicalize_runtime(s)
+    }
+
+    pub fn canonicalize_any<'b>(&self, s: &'b str) -> &'b str {
+        if self.pack.special_forms.contains_key(s) || self.pack.runtime_aliases.contains_key(s) {
+            self.pack.canonicalize_any(s)
+        } else {
+            s
+        }
+    }
+}
