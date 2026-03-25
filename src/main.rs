@@ -9,6 +9,7 @@ mod stdlib;
 mod symbols;
 mod debugger;
 mod run;
+mod locale_pack;
 
 use std::env;
 use std::process;

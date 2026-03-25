@@ -1,4 +1,5 @@
 use crate::locale::Locale;
+use crate::locale_pack::LocalePack;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
@@ -22,123 +23,10 @@ pub enum LexError {
     UnterminatedComment { at: usize },
 }
 
-#[derive(Debug, Clone)]
-struct Pair {
-    open: &'static str,
-    close: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    Ltr,
-    Rtl,
-}
-
-#[derive(Debug, Clone)]
-struct LocaleSpec {
-    list: Pair,
-    string: Pair,
-    comment: Pair,
-    direction: Direction,
-}
-
-fn spec(locale: Locale) -> LocaleSpec {
-    match locale {
-        Locale::ZhCN => LocaleSpec {
-            list: Pair {
-                open: "“",
-                close: "”",
-            },
-            string: Pair {
-                open: "（",
-                close: "）",
-            },
-            comment: Pair {
-                open: "《",
-                close: "》",
-            },
-            direction: Direction::Ltr,
-        },
-        Locale::JaJP => LocaleSpec {
-            list: Pair {
-                open: "「",
-                close: "」",
-            },
-            string: Pair {
-                open: "（",
-                close: "）",
-            },
-            comment: Pair {
-                open: "『",
-                close: "』",
-            },
-            direction: Direction::Ltr,
-        },
-        Locale::FrFR => LocaleSpec {
-            list: Pair {
-                open: "«",
-                close: "»",
-            },
-            string: Pair {
-                open: "‹",
-                close: "›",
-            },
-            comment: Pair {
-                open: "⟪",
-                close: "⟫",
-            },
-            direction: Direction::Ltr,
-        },
-        Locale::DeDE => LocaleSpec {
-            list: Pair {
-                open: "„",
-                close: "“",
-            },
-            string: Pair {
-                open: "‚",
-                close: "‘",
-            },
-            comment: Pair {
-                open: "〚",
-                close: "〛",
-            },
-            direction: Direction::Ltr,
-        },
-        Locale::ArSA => LocaleSpec {
-            list: Pair {
-                open: "﴿",
-                close: "﴾",
-            },
-            string: Pair {
-                open: "«",
-                close: "»",
-            },
-            comment: Pair {
-                open: "⟪",
-                close: "⟫",
-            },
-            direction: Direction::Ltr,
-        },
-        Locale::EnUS => LocaleSpec {
-            list: Pair {
-                open: "“",
-                close: "”",
-            },
-            string: Pair {
-                open: "(",
-                close: ")",
-            },
-            comment: Pair {
-                open: "\"",
-                close: "\"",
-            },
-            direction: Direction::Ltr,
-        },
-    }
-}
 
 pub fn lex(src: &str, locale: Locale) -> Result<Vec<Token>, LexError> {
-    let sp = spec(locale);
+    let fromPack = LocalePack::for_locale(locale);
+    let sp = fromPack.delimiters;
     let mut out = Vec::new();
     let mut i = 0;
 
