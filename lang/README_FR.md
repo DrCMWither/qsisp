@@ -48,6 +48,24 @@ Ou mélangez toutes les langues.
 Nous vous déconseillons fortement de le faire.
 
 
+## Exécution locale / Développement
+
+1. Clonez le dépôt :
+
+```bash
+git clone https://github.com/DrCMWither/qsisp
+cd qsisp
+```
+
+2. Assurez-vous que votre environnement local est à jour. Ce projet nécessite `Rust >= 1.75` ainsi que `cargo`.
+
+3. Exécutez directement ou construisez une version release :
+
+```bash
+cargo run -- test.qs
+cargo build --release
+```
+
 ## Récompenses
 
 * Prix d’horreur des langages interculturels

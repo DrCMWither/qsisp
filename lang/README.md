@@ -50,6 +50,24 @@
 我们建议不要。
 
 
+## 如何本地运行/开发
+
+1. 克隆该项目；
+
+```bash
+git clone https://github.com/DrCMWither/qsisp
+cd qsisp
+```
+
+2. 更新你的本地环境。该项目要求 `Rust >= 1.75` 和 `cargo`；
+
+3. 直接运行；或者构建 release。
+
+```bash
+cargo run -- test.qs
+cargo build --release
+```
+
 ## 获奖记录
 
 * 跨文化编程语言恐怖奖
