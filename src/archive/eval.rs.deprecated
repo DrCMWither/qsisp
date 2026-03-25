@@ -1,0 +1,433 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::parser::Expr;
+use crate::symbols;
+
+#[derive(Clone, PartialEq)]
+pub struct Function {
+    pub name: Option<String>,
+    pub params: Vec<String>,
+    pub body: Expr,
+    pub env: Env,
+}
+
+pub type BuiltinFunc = fn(&[Value]) -> Result<Value, EvalError>;
+
+#[derive(Clone, PartialEq)]
+pub enum Value {
+    Number(i64),
+    String(String),
+    Bool(bool),
+    Function(Function),
+    Builtin {
+        name: &'static str,
+        func: BuiltinFunc,
+    },
+    Nil,
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Number(n) => write!(f, "{n}"),
+            Value::String(s) => write!(f, "{s}"),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Function(func) => {
+                if let Some(name) = &func.name {
+                    write!(f, "<function:{name}>")
+                } else {
+                    write!(f, "<function>")
+                }
+            }
+            Value::Builtin { name, .. } => write!(f, "<builtin:{name}>"),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EvalError {
+    UndefinedSymbol(String),
+    InvalidForm(String),
+    TypeError(String),
+    ArityMismatch { expected: usize, got: usize },
+}
+
+#[derive(Clone)]
+pub struct Env(Rc<RefCell<EnvFrame>>);
+
+#[derive(Debug)]
+struct EnvFrame {
+    vars: HashMap<String, Value>,
+    parent: Option<Env>,
+}
+
+impl PartialEq for Env {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::fmt::Debug for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Function")
+            .field("name", &self.name)
+            .field("params", &self.params)
+            .field("body", &self.body)
+            .field("env", &"<captured-env>")
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Env {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let frame = self.0.borrow();
+        let keys: Vec<&String> = frame.vars.keys().collect();
+
+        f.debug_struct("Env")
+            .field("bindings", &keys)
+            .field("has_parent", &frame.parent.is_some())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Number(n) => f.debug_tuple("Number").field(n).finish(),
+            Value::String(s) => f.debug_tuple("String").field(s).finish(),
+            Value::Bool(b) => f.debug_tuple("Bool").field(b).finish(),
+            Value::Function(func) => f.debug_tuple("Function").field(func).finish(),
+            Value::Builtin { name, .. } => f.debug_tuple("Builtin").field(name).finish(),
+            Value::Nil => write!(f, "Nil"),
+        }
+    }
+}
+
+impl Env {
+    pub fn new() -> Self {
+        Self(Rc::new(RefCell::new(EnvFrame {
+            vars: HashMap::new(),
+            parent: None,
+        })))
+    }
+
+    pub fn child(parent: Env) -> Self {
+        Self(Rc::new(RefCell::new(EnvFrame {
+            vars: HashMap::new(),
+            parent: Some(parent),
+        })))
+    }
+
+    pub fn get(&self, name: &str) -> Option<Value> {
+        let frame = self.0.borrow();
+
+        if let Some(v) = frame.vars.get(name) {
+            return Some(v.clone());
+        }
+
+        let parent = frame.parent.clone();
+        drop(frame);
+
+        parent.and_then(|p| p.get(name))
+    }
+
+    pub fn set(&self, name: String, value: Value) {
+        self.0.borrow_mut().vars.insert(name, value);
+    }
+
+    pub fn assign(&self, name: &str, value: Value) -> Result<(), EvalError> {
+        {
+            let mut frame = self.0.borrow_mut();
+            if frame.vars.contains_key(name) {
+                frame.vars.insert(name.to_string(), value);
+                return Ok(());
+            }
+        }
+        let parent = self.0.borrow().parent.clone();
+        if let Some(parent) = parent {
+            parent.assign(name, value)
+        } else {
+            Err(EvalError::UndefinedSymbol(name.to_string()))
+        }
+    }
+}
+
+pub fn eval_program(exprs: &[Expr], env: &Env) -> Result<Vec<Value>, EvalError> {
+    let mut out = Vec::new();
+    for expr in exprs {
+        out.push(eval(expr, env)?);
+    }
+    Ok(out)
+}
+
+pub fn eval(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
+    match expr {
+        Expr::Number(n) => Ok(Value::Number(*n)),
+        Expr::String(s) => Ok(Value::String(s.clone())),
+        Expr::Symbol(name) => env
+            .get(name)
+            .ok_or_else(|| EvalError::UndefinedSymbol(name.clone())),
+        Expr::List(items) => eval_list(items, env),
+    }
+}
+
+fn eval_list(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.is_empty() {
+        return Err(EvalError::InvalidForm(
+            "empty list cannot be evaluated".into(),
+        ));
+    }
+
+    match &items[0] {
+        Expr::Symbol(name) if name == symbols::DEFINE => return eval_define(items, env),
+        Expr::Symbol(name) if name == symbols::IF => return eval_if(items, env),
+        Expr::Symbol(name) if name == symbols::LET => return eval_let(items, env),
+        Expr::Symbol(name) if name == symbols::LAMBDA => return eval_lambda(items, env),
+        Expr::Symbol(name) if name == symbols::BEGIN => return eval_begin(items, env),
+        Expr::Symbol(name) if name == symbols::SET => return eval_set(items, env),
+        _ => {}
+    }
+
+    let callee = eval(&items[0], env)?;
+    apply(callee, &items[1..], env)
+}
+
+fn eval_define(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() != 3 {
+        return Err(EvalError::InvalidForm(
+            "define expects exactly 2 arguments".into(),
+        ));
+    }
+
+    match &items[1] {
+        Expr::Symbol(name) => {
+            let value = eval(&items[2], env)?;
+            env.set(name.clone(), value.clone());
+            Ok(value)
+        }
+
+        Expr::List(sig) => {
+            if sig.is_empty() {
+                return Err(EvalError::InvalidForm(
+                    "define: function signature cannot be empty".into(),
+                ));
+            }
+
+            let fname = match &sig[0] {
+                Expr::Symbol(s) => s.clone(),
+                _ => {
+                    return Err(EvalError::InvalidForm(
+                        "define: function name must be a symbol".into(),
+                    ));
+                }
+            };
+
+            let mut params = Vec::new();
+            for param in &sig[1..] {
+                match param {
+                    Expr::Symbol(s) => params.push(s.clone()),
+                    _ => {
+                        return Err(EvalError::InvalidForm(
+                            "define: function parameters must be symbols".into(),
+                        ));
+                    }
+                }
+            }
+
+            let func = Value::Function(Function {
+                name: Some(fname.clone()),
+                params,
+                body: items[2].clone(),
+                env: env.clone(),
+            });
+
+            env.set(fname, func.clone());
+            Ok(func)
+        }
+
+        _ => Err(EvalError::InvalidForm(
+            "define: first argument must be a symbol or a parameter list".into(),
+        )),
+    }
+}
+
+fn eval_if(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() != 4 {
+        return Err(EvalError::InvalidForm(
+            "if expects exactly 3 arguments".into(),
+        ));
+    }
+
+    let cond = eval(&items[1], env)?;
+    if is_truthy(&cond) {
+        eval(&items[2], env)
+    } else {
+        eval(&items[3], env)
+    }
+}
+
+fn eval_let(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() != 3 {
+        return Err(EvalError::InvalidForm(
+            "let expects exactly 2 arguments".into(),
+        ));
+    }
+
+    let bindings = match &items[1] {
+        Expr::List(xs) => xs,
+        _ => {
+            return Err(EvalError::InvalidForm(
+                "let: first argument must be a binding list".into(),
+            ));
+        }
+    };
+
+    let local_env = Env::child(env.clone());
+
+    for binding in bindings {
+        let pair = match binding {
+            Expr::List(pair) if pair.len() == 2 => pair,
+            _ => {
+                return Err(EvalError::InvalidForm(
+                    "let: each binding must be a list of length 2".into(),
+                ));
+            }
+        };
+
+        let name = match &pair[0] {
+            Expr::Symbol(s) => s.clone(),
+            _ => {
+                return Err(EvalError::InvalidForm(
+                    "let: binding name must be a symbol".into(),
+                ));
+            }
+        };
+
+        let value = eval(&pair[1], env)?;
+        local_env.set(name, value);
+    }
+
+    eval(&items[2], &local_env)
+}
+
+fn eval_lambda(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() != 3 {
+        return Err(EvalError::InvalidForm(
+            "lambda expects exactly 2 arguments".into(),
+        ));
+    }
+
+    let params_expr = match &items[1] {
+        Expr::List(xs) => xs,
+        _ => {
+            return Err(EvalError::InvalidForm(
+                "lambda: parameter list must be a list".into(),
+            ));
+        }
+    };
+
+    let mut params = Vec::new();
+    for p in params_expr {
+        match p {
+            Expr::Symbol(s) => params.push(s.clone()),
+            _ => {
+                return Err(EvalError::InvalidForm(
+                    "lambda: parameters must be symbols".into(),
+                ));
+            }
+        }
+    }
+
+    Ok(Value::Function(Function {
+        name: None,
+        params,
+        body: items[2].clone(),
+        env: env.clone(),
+    }))
+}
+
+fn eval_begin(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() == 1 {
+        return Ok(Value::Nil);
+    }
+
+    let mut last = Value::Nil;
+    for expr in &items[1..] {
+        last = eval(expr, env)?;
+    }
+    Ok(last)
+}
+
+fn eval_set(items: &[Expr], env: &Env) -> Result<Value, EvalError> {
+    if items.len() != 3 {
+        return Err(EvalError::InvalidForm(
+            "set! expects exactly 2 arguments".into(),
+        ));
+    }
+
+    let name = match &items[1] {
+        Expr::Symbol(s) => s.clone(),
+        _ => {
+            return Err(EvalError::InvalidForm(
+                "set!: first argument must be a symbol".into(),
+            ));
+        }
+    };
+
+    let value = eval(&items[2], env)?;
+    env.assign(&name, value.clone())?;
+    Ok(value)
+}
+
+fn apply(func_value: Value, arg_exprs: &[Expr], call_env: &Env) -> Result<Value, EvalError> {
+    match func_value {
+        Value::Function(func) => {
+            if arg_exprs.len() != func.params.len() {
+                return Err(EvalError::ArityMismatch {
+                    expected: func.params.len(),
+                    got: arg_exprs.len(),
+                });
+            }
+
+            let local_env = Env::child(func.env.clone());
+
+            if let Some(name) = &func.name {
+                local_env.set(name.clone(), Value::Function(func.clone()));
+            }
+
+            for (param, arg_expr) in func.params.iter().zip(arg_exprs.iter()) {
+                let arg_value = eval(arg_expr, call_env)?;
+                local_env.set(param.clone(), arg_value);
+            }
+
+            eval(&func.body, &local_env)
+        }
+
+        Value::Builtin { func, .. } => {
+            let mut args = Vec::new();
+            for arg_expr in arg_exprs {
+                args.push(eval(arg_expr, call_env)?);
+            }
+            func(&args)
+        }
+
+        other => Err(EvalError::TypeError(format!(
+            "attempted to call a non-function value: {:?}",
+            other
+        ))),
+    }
+}
+
+fn is_truthy(value: &Value) -> bool {
+    match value {
+        Value::Bool(b) => *b,
+        Value::Nil => false,
+        Value::Number(n) => *n != 0,
+        Value::String(s) => !s.is_empty(),
+        Value::Function(_) => true,
+        Value::Builtin { .. } => true,
+    }
+}
