@@ -55,7 +55,7 @@
 1. 克隆该项目；
 
 ```bash
-git clone https://github.com/DrCMWither/qsisp
+git clone https://github.com/DrCMWither/qsisp.git
 cd qsisp
 ```
 
@@ -64,7 +64,7 @@ cd qsisp
 3. 直接运行；或者构建 release。
 
 ```bash
-cargo run -- test.qs
+cargo run -- example/test.qs
 cargo build --release
 ```
 

@@ -52,7 +52,7 @@ We strongly recommend against doing that.
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/DrCMWither/qsisp
+git clone https://github.com/DrCMWither/qsisp.git
 cd qsisp
 ```
 
@@ -61,7 +61,7 @@ cd qsisp
 3. Run directly or build a release version:
 
 ```bash
-cargo run -- test.qs
+cargo run -- example/test.qs
 cargo build --release
 ```
 
