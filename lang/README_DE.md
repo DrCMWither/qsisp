@@ -1,6 +1,6 @@
 # qƨisp
 
-[DE](lang/README_DE.md)|[EN](lang/README_EN.md)|[FR](lang/README_FR.md)|[ZH](README.md)
+[DE](README_DE.md)|[EN](README_EN.md)|[FR](README_FR.md)|[ZH](README.md)
 
 ### Programmiersprache: Erschaffe deine eigene!
 
