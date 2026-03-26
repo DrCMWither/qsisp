@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::locale::Locale;
 use crate::symbols;
 
-// TOML on the way
+// TOML is on the way
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
