@@ -1,3 +1,5 @@
+<img src=https://github.com/DrCMWither/qsisp/blob/master/docs/logo/qsisp.png width=300 />
+
 # qƨisp
 
 [DE](docs/README_DE.md)|[EN](docs/README_EN.md)|[FR](docs/README_FR.md)|[ZH](docs/README.md)
