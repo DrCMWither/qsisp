@@ -1,6 +1,6 @@
 # qƨisp
 
-[DE](README_DE.md)|[EN](README_EN.md)|[FR](README_FR.md)|[ZH](README.md)
+[DE](docs/README_DE.md)|[EN](docs/README_EN.md)|[FR](docs/README_FR.md)|[ZH](docs/README.md)
 
 ### 编程语言：创造你自己！
 

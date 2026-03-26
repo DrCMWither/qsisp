@@ -84,18 +84,18 @@ fn eval_list(items: &[Expr], env: &Env, pack: &LocalePack) -> Result<Value, Eval
 
 pub fn expr_to_value(expr: &Expr) -> Value {
     match expr {
-        Expr::Number(n) => Value::Number(*n),
-        Expr::String(s) => Value::String(s.clone()),
-        Expr::Symbol(s) => Value::Symbol(s.clone()),
+        Expr::Number(n)   => Value::Number(*n),
+        Expr::String(s)   => Value::String(s.clone()),
+        Expr::Symbol(s)   => Value::Symbol(s.clone()),
         Expr::List(items) => Value::List(items.iter().map(expr_to_value).collect()),
     }
 }
 
 pub fn value_to_expr(val: &Value) -> Result<Expr, EvalError> {
     match val {
-        Value::Number(n) => Ok(Expr::Number(*n)),
-        Value::String(s) => Ok(Expr::String(s.clone())),
-        Value::Symbol(s) => Ok(Expr::Symbol(s.clone())),
+        Value::Number(n)   => Ok(Expr::Number(*n)),
+        Value::String(s)   => Ok(Expr::String(s.clone())),
+        Value::Symbol(s)   => Ok(Expr::Symbol(s.clone())),
         Value::List(items) => {
             let mut exprs = Vec::new();
             for item in items {
@@ -109,10 +109,10 @@ pub fn value_to_expr(val: &Value) -> Result<Expr, EvalError> {
 
 pub(crate) fn is_truthy(value: &Value) -> bool {
     match value {
-        Value::Bool(b) => *b,
-        Value::Nil => false,
-        Value::Number(n) => *n != 0,
-        Value::String(s) => !s.is_empty(),
+        Value::Bool(b)    => *b,
+        Value::Nil        => false,
+        Value::Number(n)  => *n != 0,
+        Value::String(s)  => !s.is_empty(),
         Value::Function(_)
         | Value::Builtin { .. }
         | Value::Symbol(_)

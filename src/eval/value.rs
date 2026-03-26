@@ -32,22 +32,22 @@ pub enum Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Number(n) => write!(f, "{n}"),
-            Value::String(s) => write!(f, "{s}"),
-            Value::Bool(b) => write!(f, "{b}"),
-            Value::Symbol(s) => write!(f, "{s}"),
-            Value::List(items) => {
+            Value::Number(n)           => write!(f, "{n}"),
+            Value::String(s)           => write!(f, "{s}"),
+            Value::Bool(b)             => write!(f, "{b}"),
+            Value::Symbol(s)           => write!(f, "{s}"),
+            Value::List(items)         => {
                 let items_str: Vec<String> = items.iter().map(|v| v.to_string()).collect();
                 write!(f, "({})", items_str.join(" "))
             }
-            Value::Function(func) => {
+            Value::Function(func)      => {
                 if let Some(name) = &func.name {
                     write!(f, "<function:{name}>")
                 } else {
                     write!(f, "<function>")
                 }
             }
-            Value::Macro(func) => {
+            Value::Macro(func)         => {
                 if let Some(name) = &func.name {
                     write!(f, "<macro:{name}>")
                 } else {
@@ -55,7 +55,7 @@ impl std::fmt::Display for Value {
                 }
             }
             Value::Builtin { name, .. } => write!(f, "<builtin:{name}>"),
-            Value::Nil => write!(f, "nil"),
+            Value::Nil                  => write!(f, "nil"),
         }
     }
 }
@@ -74,15 +74,15 @@ impl std::fmt::Debug for Function {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Number(n) => f.debug_tuple("Number").field(n).finish(),
-            Value::String(s) => f.debug_tuple("String").field(s).finish(),
-            Value::Bool(b) => f.debug_tuple("Bool").field(b).finish(),
-            Value::Symbol(s) => f.debug_tuple("Symbol").field(s).finish(),
-            Value::List(items) => f.debug_tuple("List").field(items).finish(),
-            Value::Function(func) => f.debug_tuple("Function").field(func).finish(),
-            Value::Macro(func) => f.debug_tuple("Macro").field(func).finish(),
+            Value::Number(n)            => f.debug_tuple("Number").field(n).finish(),
+            Value::String(s)            => f.debug_tuple("String").field(s).finish(),
+            Value::Bool(b)              => f.debug_tuple("Bool").field(b).finish(),
+            Value::Symbol(s)            => f.debug_tuple("Symbol").field(s).finish(),
+            Value::List(items)          => f.debug_tuple("List").field(items).finish(),
+            Value::Function(func)       => f.debug_tuple("Function").field(func).finish(),
+            Value::Macro(func)          => f.debug_tuple("Macro").field(func).finish(),
             Value::Builtin { name, .. } => f.debug_tuple("Builtin").field(name).finish(),
-            Value::Nil => write!(f, "Nil"),
+            Value::Nil                  => write!(f, "Nil"),
         }
     }
 }
