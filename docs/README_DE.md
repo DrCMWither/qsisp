@@ -1,8 +1,12 @@
+<img src=https://github.com/DrCMWither/qsisp/blob/main/docs/logo/qsisp.png width=300 />
+
 # qƨisp
 
 [DE](README_DE.md)|[EN](README_EN.md)|[FR](README_FR.md)|[ZH](README.md)
 
 ### Programmiersprache: Erschaffe deine eigene!
+
+---
 
 ## Was ist qƨisp?
 

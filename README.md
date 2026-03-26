@@ -1,4 +1,4 @@
-<img src=https://github.com/DrCMWither/qsisp/blob/master/docs/logo/qsisp.png width=300 />
+<img src=https://github.com/DrCMWither/qsisp/blob/main/docs/logo/qsisp.png width=300 />
 
 # qƨisp
 
