@@ -52,11 +52,11 @@ fn parse_expr(tokens: &[Token], pos: &mut usize) -> Result<Expr, ParseError> {
         TokenKind::RParen => Err(ParseError::UnexpectedRParen { at: tok.start }),
         TokenKind::String(s) => {
             *pos += 1;
-            Ok(Expr::String(s.clone()))
+            Ok(Expr::String(s.to_string()))
         }
         TokenKind::Symbol(s) => {
             *pos += 1;
-            Ok(Expr::Symbol(s.clone()))
+            Ok(Expr::Symbol(s.to_string()))
         }
         TokenKind::Number(n) => {
             let at = tok.start;
@@ -64,7 +64,7 @@ fn parse_expr(tokens: &[Token], pos: &mut usize) -> Result<Expr, ParseError> {
             *pos += 1;
             match text.parse::<i64>() {
                 Ok(v) => Ok(Expr::Number(v)),
-                Err(_) => Err(ParseError::InvalidNumber { text, at }),
+                Err(_) => Err(ParseError::InvalidNumber { text: text.to_string(), at }),
             }
         }
     }

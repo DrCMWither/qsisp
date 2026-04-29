@@ -2,17 +2,17 @@ use crate::locale::Locale;
 use crate::locale_pack::LocalePack;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TokenKind {
+pub enum TokenKind<'a> {
     LParen,
     RParen,
-    String(String),
-    Symbol(String),
-    Number(String),
+    String(&'a str),
+    Symbol(&'a str),
+    Number(&'a str),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token {
-    pub kind: TokenKind,
+pub struct Token<'a> {
+    pub kind: TokenKind<'a>,
     pub start: usize,
     pub end: usize,
 }
@@ -24,106 +24,77 @@ pub enum LexError {
 }
 
 
-pub fn lex(src: &str, locale: Locale) -> Result<Vec<Token>, LexError> {
-    let fromPack = LocalePack::for_locale(locale);
-    let sp = fromPack.delimiters;
+pub fn lex<'a>(src: &'a str, locale: Locale) -> Result<Vec<Token<'a>>, LexError> {
+    let from_pack = LocalePack::for_locale(locale);
+    let sp = from_pack.delimiters;
     let mut out = Vec::new();
     let mut i = 0;
 
     while i < src.len() {
         let rest = &src[i..];
 
-        if rest.starts_with(sp.comment.open) {
-            i += sp.comment.open.len();
-            loop {
-                if i >= src.len() {
-                    return Err(LexError::UnterminatedComment { at: i });
-                }
-                if src[i..].starts_with(sp.comment.close) {
-                    i += sp.comment.close.len();
-                    break;
-                }
-                let ch = src[i..].chars().next().unwrap();
-                i += ch.len_utf8();
-            }
+        let whitespace_len = rest.len() - rest.trim_start().len();
+        if whitespace_len > 0 {
+            i += whitespace_len;
             continue;
+        }
+
+        if let Some(after_open) = rest.strip_prefix(sp.comment.open) {
+            let content_start = i + sp.comment.open.len();
+            if let Some(close_idx) = src[content_start..].find(sp.comment.close) {
+                i = content_start + close_idx + sp.comment.close.len();
+                continue;
+            } else {
+                return Err(LexError::UnterminatedComment { at: i });
+            }
         }
 
         if rest.starts_with(sp.list.open) {
-            let start = i;
+            out.push(Token { kind: TokenKind::LParen, start: i, end: i + sp.list.open.len() });
             i += sp.list.open.len();
-            out.push(Token {
-                kind: TokenKind::LParen,
-                start,
-                end: i,
-            });
             continue;
         }
-
         if rest.starts_with(sp.list.close) {
-            let start = i;
+            out.push(Token { kind: TokenKind::RParen, start: i, end: i + sp.list.close.len() });
             i += sp.list.close.len();
-            out.push(Token {
-                kind: TokenKind::RParen,
-                start,
-                end: i,
-            });
             continue;
         }
 
-        if rest.starts_with(sp.string.open) {
-            let start = i;
-            i += sp.string.open.len();
-            let content_start = i;
-
-            loop {
-                if i >= src.len() {
-                    return Err(LexError::UnterminatedString { at: start });
-                }
-                if src[i..].starts_with(sp.string.close) {
-                    let content = src[content_start..i].to_string();
-                    i += sp.string.close.len();
-                    out.push(Token {
-                        kind: TokenKind::String(content),
-                        start,
-                        end: i,
-                    });
-                    break;
-                }
-                let ch = src[i..].chars().next().unwrap();
-                i += ch.len_utf8();
+        if let Some(after_open) = rest.strip_prefix(sp.string.open) {
+            let content_start = i + sp.string.open.len();
+            if let Some(close_idx) = src[content_start..].find(sp.string.close) {
+                let content = &src[content_start..content_start + close_idx]; // 零拷贝切片
+                let end = content_start + close_idx + sp.string.close.len();
+                out.push(Token {
+                    kind: TokenKind::String(content),
+                    start: i,
+                    end,
+                });
+                i = end;
+                continue;
+            } else {
+                return Err(LexError::UnterminatedString { at: i });
             }
-            continue;
         }
 
-        let ch = rest.chars().next().unwrap();
-        if ch.is_whitespace() {
-            i += ch.len_utf8();
-            continue;
-        }
+        let mut symbol_len = rest.len();
+        for (pos, ch) in rest.char_indices() {
+            let current = &rest[pos..];
 
-        let start = i;
-        while i < src.len() {
-            let r = &src[i..];
-            if r.starts_with(sp.comment.open)
-                || r.starts_with(sp.list.open)
-                || r.starts_with(sp.list.close)
-                || r.starts_with(sp.string.open)
-                || r.starts_with(sp.string.close)
+            if ch.is_whitespace()
+                || current.starts_with(sp.comment.open)
+                || current.starts_with(sp.list.open)
+                || current.starts_with(sp.list.close)
+                || current.starts_with(sp.string.open)
+                || current.starts_with(sp.string.close)
             {
+                symbol_len = pos;
                 break;
             }
-
-            let ch = r.chars().next().unwrap();
-            if ch.is_whitespace() {
-                break;
-            }
-
-            i += ch.len_utf8();
         }
 
-        let text = src[start..i].to_string();
-        let kind = if is_number_like(&text) {
+        let text = &rest[..symbol_len];
+        let kind = if is_number_like(text) {
             TokenKind::Number(text)
         } else {
             TokenKind::Symbol(text)
@@ -131,9 +102,11 @@ pub fn lex(src: &str, locale: Locale) -> Result<Vec<Token>, LexError> {
 
         out.push(Token {
             kind,
-            start,
-            end: i,
+            start: i,
+            end: i + symbol_len,
         });
+
+        i += symbol_len;
     }
 
     Ok(out)
